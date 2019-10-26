@@ -1,0 +1,12 @@
+name: Global_Mortality_Disease
+title: Global_Mortality_Disease
+username:
+account: dzelrahman
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1064709
+bundleId: 2286202
+url: https://dzelrahman.shinyapps.io/Global_Mortality_Disease/
+when: 1564743480.0236
+asMultiple: FALSE
+asStatic: FALSE

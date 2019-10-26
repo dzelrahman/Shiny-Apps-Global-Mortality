@@ -1,0 +1,301 @@
+---
+title: "Disease"
+author: "Faris Dzikrur R"
+date: "31/07/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(broom)
+
+library(rjson)
+library(bbplot)
+library(ggthemes)
+library(maps)
+library(leaflet)
+library(mapdata)
+library(plotly)
+library(bbplot)
+
+library(tidyverse)
+
+library(ggthemes)
+library(scico)
+
+library(mapproj)
+library(animation)
+library(tweenr)
+library(gganimate)
+library(ggthemes)
+```
+
+Global Mortality:
+
+WHO: Those who concern with public health policy issue
+
+WHAT:  
+1. Top cause of death in each country
+2. Trend of each disease across the year in every country
+3. Correlation between cause of death and life expectancy
+
+WHY:
+1. 
+
+WHERE:
+1. Global
+
+WHEN:
+1990 - 2016
+
+HOW:
+1. I use bar plot to know the top cause of death in each country
+2. I plot the death rate by using map to know where each of the death cause spread in each country across the years
+3. I use geom_point to make a correlation between death rate and life expectancy so we could know which disease have negative correlation with the growth in life expectancy.
+```{r}
+global_mortality <- read_xlsx("global_mortality (1).xlsx")
+life_dat <- read_csv("Global_Mortality_Disease/week14_global_life_expectancy.csv") %>% 
+  filter(year == 2015) %>% 
+  mutate(country = case_when(
+    country == "United States" ~ "United States of America",
+    country == "Democratic Republic of Congo" ~ "Democratic Republic of the Congo",
+    country == "Congo" ~ "Republic of the Congo",
+    country == "Cote d'Ivoire" ~ "Ivory Coast",
+    country == "Serbia (including Kosovo)" ~ "Republic of Serbia",
+    country == "Tanzania" ~ "United Republic of Tanzania",
+    TRUE ~ country
+  ))
+```
+
+```{r}
+tidy_mortality <- global_mortality %>% 
+  clean_names %>% 
+  gather("cause", "percent_mortality", -country, -country_code, -year) %>% 
+  mutate(cause = cause %>% str_replace("_percent", ""))
+
+head(tidy_mortality)
+```
+
+```{r}
+str(tidy_mortality)
+```
+
+```{r}
+tidy_mortality <- tidy_mortality %>% 
+  mutate_if(is.character, as.factor)
+
+str(tidy_mortality)
+```
+
+###Plot 1
+```{r}
+data_plot_arrange <- tidy_mortality %>% 
+  filter(year == 2016, country == "China") %>% 
+  group_by(cause, year, country) %>% 
+  summarise(rates=mean(percent_mortality)) %>% 
+  arrange(desc(rates))
+
+ggplot(data_plot, aes(x= reorder(cause, rates), y=rates, fill=cause)) +
+  geom_bar(show.legend = F, stat = "identity") +
+  
+  coord_flip() +
+
+  theme_classic()+
+  
+  geom_text(aes(label=paste0(round(rates,1), '%')), position = position_dodge(width = .9), hjust = 'left', vjust = 'center', size = 2.5)
+  
+  
+  
+  geom_text(aes(label = paste(round(100 * rates, 2), "%")), hjust = -0.1)+
+      scale_y_continuous(labels = scales::percent, limits = c(0, 0.35))+
+      scale_fill_manual(values = colors)+
+      guides(fill = FALSE)+
+      coord_flip()+
+      xlab("")+
+      ylab("")+
+      theme_classic()+
+      labs(title = title, subtitle = subtitle, caption = caption) 
+     
+
+head(data_plot_arrange$rates,1)
+
+
+
+
+
+  
+  
+```
+
+###Plot 2
+```{r}
+mortality <- global_mortality
+
+names(mortality) <- str_trim(str_remove_all(names(mortality), "[[:punct:]]"))
+
+mortality_SDI <- mortality %>% 
+  gather(cause, pct, -c("country", "countrycode", "year")) %>%  
+  filter(str_detect(country, "SDI"), cause == "Cancers") %>% 
+  select(1,3,4,5) %>% 
+  mutate(country == factor(country, levels=c("High SDI", "High-middle SDI", "Middle SDI", "Low-middle SDI", "Low SDI")))
+```
+
+```{r}
+ggplot(mortality_SDI, aes(year, pct/100, color=country)) + 
+  geom_line(size=1.2) +
+  scale_color_ptol("Socio-Demographic Index") +
+  theme_minimal() +
+  scale_y_continuous(labels=scales::percent) +
+  scale_x_continuous(breaks = c(1990, 1995, 2000, 2005, 2010, 2015)) +
+  labs(x=NULL, y=NULL, title="Percentage of Deaths Attributed to Cancer", subtitle = "Not a sign of decreasing")+
+  theme_economist() + scale_colour_economist()
+
+```
+
+
+### Plot 3
+```{r}
+world <- map_data("world") %>% 
+  rename(country = region)
+
+world_mart <- tidy_mortality %>% 
+  inner_join(world, by = "country") %>% 
+  filter(year == 2015, cause == "cardiovascular_diseases") %>% 
+  mutate(z_score = ave(percent_mortality, cause, FUN = scale))
+```
+
+```{r}
+map <- ggplot(world_mart, aes(x=long, y=lat, group=group)) +
+  geom_polygon(aes(fill=percent_mortality), color = "black") +
+  coord_fixed(1.3) +
+  scale_fill_gradient(high="red", low="yellow") +
+  labs(title="Cardiovascular Disease Rates Across The Globe in 2015")
+
+ggplotly(map)
+```
+
+### Plot 4
+
+```{r}
+big_dat <- left_join(life_dat, tidy_mortality, by=c("code"="country_code", "year"="year"))
+
+test <- big_dat %>% 
+  filter(!is.na(code), cause == "cardiovascular_diseases")
+
+ggplot(test, aes(x = percent_mortality/100, y = life_expectancy)) + 
+  geom_point(alpha = .5) + 
+  geom_smooth(aes(color = cause)) + 
+  scale_color_viridis_d() +
+  labs(title = "Percent of Deaths to Life Expectancy Worldwide",
+       y = "Life Expectancy", x = "Percent") +
+  guides(color = FALSE) 
+```
+
+
+```{r}
+mortality_SDI_1 <- mortality %>% 
+  gather(cause, pct, -c("country", "countrycode", "year"))
+
+mortality_SDI_1 <- mortality_SDI_1 %>% 
+  mutate_if(is.character, as.factor)
+
+p <- mortality_SDI_1 %>% 
+  filter(str_detect(country, "SDI"), cause == "Cancers") %>% 
+  select(1,3,4,5) %>% 
+  mutate(country == factor(country, levels=c("High SDI", "High-middle SDI", "Middle SDI", "Low-middle SDI", "Low SDI")))
+
+check <- mortality_SDI_1 %>% 
+  filter(str_detect(country, "SDI")) %>% 
+  select(1,3,4,5)
+
+lsm <- check %>% 
+  filter(cause == "Cancers")
+
+ggplot(lsm, aes(year, pct/100, color=country)) + 
+  geom_line(size=1.2) +
+  scale_color_ptol("Socio-Demographic Index") +
+  theme_minimal() +
+  scale_y_continuous(labels=scales::percent) +
+  scale_x_continuous(breaks = c(1990, 1995, 2000, 2005, 2010, 2015)) +
+  labs(x=NULL, y=NULL, title="Percentage of Deaths Attributed to Cancer", subtitle = "Not a sign of decreasing")
+
+
+mortality_final <- tidy_mortality %>% 
+  filter(str_detect(country, "SDI")) %>% 
+  select(1,3,4,5)
+
+data_output_2 <- mortality_final %>% 
+  filter(cause == "major_options_2")
+```
+
+
+```{r}
+check$cause
+
+
+lsm$country
+
+```
+
+```{r}
+   major_react_2 <- reactive({
+       major_options_2 <- input$major_options_2
+      
+      data_output_2 <- mortality_final %>% 
+         filter(cause == "major_options_2")
+       
+       return(data_output_2)
+   })
+   
+   output$major_plot_7 <- renderPlot({
+       data_input_2 <- major_react_2()
+       
+       
+       plot_major_7 <- ggplot(data_input_2, aes_string(x=year,y=pct/100, color = country)) + 
+           geom_line(size=1.2) +
+           scale_color_ptol("Socio-Demographic Index") +
+           theme_minimal() +
+           scale_y_continuous(labels=scales::percent) +
+           scale_x_continuous(breaks = c(1990, 1995, 2000, 2005, 2010, 2015)) +
+           labs(x=NULL, y=NULL, title="Percentage of Deaths Attributed to Disease") 
+       
+       ggplot(plot_major_7)
+   })
+```
+
+```{r}
+ menuItem(
+            text = "Socio-Demographic Index",
+            tabName = "SDI",
+            icon = icon("chart-line")
+        )
+
+
+
+```
+
+```{r}
+  tabItem("SDI",
+                fluidRow(
+                    box(
+                        "Filter", br(), "Rates trend based on SDI",
+                        selectInput(
+                            inputId = "major_options_2",
+                            label = "Select Disease:",
+                            choices = levels(mortality_final$cause),
+                            multiple = FALSE
+                        )
+                    ),
+                    plotOutput(outputId = "major_plot_7")
+                    
+                )
+            
+        ),
+```
+
